@@ -2,21 +2,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace stl
-{
-    public class DLinkedNode<T>{
-        public T data;
-        public DLinkedNode<T> next = null;
-        public DLinkedNode<T> prev = null;
-
-        public DLinkedNode(){}
-        public DLinkedNode(T value) { data = value; }
-    }
+class PathItem{
+    public Vector3 position;
+    public float distance;
 }
 
 public class SnakeHeader : SnakeBody 
 {
-
     public Camera cam;
     public GameObject SnakeBodyPrefab;
     public GameObject snakeBodyMgr;
@@ -27,15 +19,19 @@ public class SnakeHeader : SnakeBody
     private float x;
     private float snakeTouspeed;
 
-    // Start is called before the first frame update
+    // 记录位置信息
+    LinkedList<PathItem> previousPositions = new LinkedList<PathItem>();
+    // 记录蛇身节点
+    List<SnakeBody> m_SnakeBodys = new List<SnakeBody>();
+    // 固定的距离；
+    float CONST_LENGTH = 1.5f;
+
     void Start()
     {
-        this.InitDLink();
-        snakeTouspeed = 2.5f;
-        // 初始化记录头节点的位置信息(最新的轨迹点放在最前面)
-        this.PrependDLNode(transform.position);
+        snakeTouspeed = 0.5f;
+        this.RecordPosition(transform.position, true);
         // 初始化加载
-        for(int i = 0; i<50; ++i){
+        for(int i = 0; i<30; ++i){
             this.AppendSnakeBody();
         }
     }
@@ -44,27 +40,137 @@ public class SnakeHeader : SnakeBody
     void Update()
     {
         moussMove();
+        // update movement
         transform.Translate(Vector3.forward.normalized *GameInfo._instance.playSpeed, Space.World); // 头节点的位置
-        // 最新的数据
-        var node = this.PrependDLNode(transform.position);
-        this.ReduceDLSize();
-        this.UpdateNext(node, 0);
-        // this.DumpLink();
+        this.RecordPosition(transform.position);
+        this.followHead(m_SnakeBodys, previousPositions);
     }
 
+    void followHead(List<SnakeBody> tail, LinkedList<PathItem> path)
+    {
+        // 包含父亲节点的路径的起点
+        LinkedListNode<PathItem> startNode = path.First;
+        // 父节点距离其路径片段的尾部的距离
+        float distanceToEnd = startNode.Value.distance;
+        foreach (SnakeBody body in tail){
+            //////// 计算 body 位置 ////////
+            if(startNode.Next == null){
+                // 已经是尾巴了
+                break;
+            }
+
+            // 距离不足，无法设置位置
+            while(distanceToEnd < CONST_LENGTH){
+                if(startNode.Next.Next == null){
+                    return;
+                }
+                startNode = startNode.Next;
+                distanceToEnd = distanceToEnd + startNode.Value.distance;
+            }
+
+            if(distanceToEnd >= CONST_LENGTH){
+                // body 应该在片段 startNode 开头的线段上
+                var ds = distanceToEnd - CONST_LENGTH;
+                var rate = 1.0f - ds/startNode.Value.distance;
+                var pos = Vector3.LerpUnclamped(startNode.Value.position, startNode.Next.Value.position, rate);
+                body.transform.position = pos;
+                distanceToEnd = distanceToEnd - CONST_LENGTH;
+            }
+        }
+
+        while (startNode.Next != path.Last)
+        {
+            path.RemoveLast();
+            path.Last.Value.distance = 0;
+        }
+    }
+
+    void followHeadXX(List<SnakeBody> tail, LinkedList<Vector3> path)
+    {
+        // assuming at least one node in linked list
+        var segmentStart = path.First.Value;
+        var segmentEndNode = path.First.Next;
+
+        var lengthToSegmentEnd = 0.0f;
+
+        SnakeBody snakeBodyParent = this;
+        foreach (var part in tail)
+        {
+            var segmentEnd = Vector3.zero;
+            var segmentDiff = Vector3.zero;
+            var segmentLength = 0f;
+            var lengthToSegmentStart = lengthToSegmentEnd;
+
+            // advance to correct segment if needed
+            while (part.DistanceToParent(snakeBodyParent) > lengthToSegmentEnd)
+            {
+                if (segmentEndNode == null)
+                {
+                    // path too short
+                    // NullReferenceException inbound, if not handled
+                    break;
+                }
+
+                segmentEnd = segmentEndNode.Value;
+                segmentDiff = segmentEnd - segmentStart;
+                segmentLength = segmentDiff.magnitude;
+                lengthToSegmentEnd += segmentLength;
+                segmentStart = segmentEndNode.Value;
+                segmentEndNode = segmentEndNode.Next;
+            }
+
+            // interpolate position on segment
+            var distanceLeft = part.DistanceToParent(snakeBodyParent) - lengthToSegmentStart;
+            var percentageAlongSegment = distanceLeft / segmentLength;
+
+            part.transform.position = segmentStart +
+                            segmentDiff * percentageAlongSegment;
+
+            segmentStart = segmentEnd;
+            snakeBodyParent = part;
+        }
+
+        // cutting off unnecessary end of path
+        while (segmentEndNode != path.Last)
+        {
+            path.RemoveLast();
+        }
+    }
+
+    LinkedListNode<PathItem> RecordPosition(Vector3 pos, bool first = false){
+        if(first){
+            var item = new PathItem();
+            item.position = pos;
+            item.distance = 0;
+            return this.previousPositions.AddFirst(item);
+        }else{
+            var preItem = this.previousPositions.First.Value;
+            var item = new PathItem();
+            item.position = pos;
+            item.distance = Vector3.Distance(preItem.position, item.position);
+            return this.previousPositions.AddFirst(item);
+        }
+    }
+
+    // 添加一个蛇身
     void AppendSnakeBody(){
-        var pos = this.GetLastPosition();
-        var _x = pos.x;
-        var _y = transform.position.y;
-        var _z = pos.z - DISTANCE;
+        // 放在尾部节点位置放蛇的 body
+        var lastPos = this.GetLastTailPosition();
         var gameObj = Instantiate(this.SnakeBodyPrefab);
         gameObj.transform.parent = this.snakeBodyMgr.transform;
-        gameObj.transform.position = new Vector3(_x, _y, _z);
+        gameObj.transform.position = lastPos;
         gameObj.transform.rotation = transform.rotation;
         var body = gameObj.GetComponent<SnakeBody>();
-        this.Append(body);
-        // 新增加在尾部的点，其位置数据变成最旧的数据
-        this.AppendDLNode(body.transform.position);
+        this.m_SnakeBodys.Add(body);
+    }
+
+    // 获取最后一个节点的位置，作为新的节点的初始位置
+    Vector3 GetLastTailPosition(){
+        if(m_SnakeBodys.Count == 0){
+            return this.transform.position;
+        }else{
+            return m_SnakeBodys[m_SnakeBodys.Count-1].transform.position;
+        }
     }
 
     void moussMove()
@@ -77,15 +183,6 @@ public class SnakeHeader : SnakeBody
         {
             mous = cam.ScreenToWorldPoint(Input.mousePosition);
             x = mous.x - MouseVe.x;
-            //if (x>0)
-            //{
-            //    transform.Translate(Vector3.right* snakeTouspeed);
-            //}
-            //else if(x < 0)
-            //{
-            //    transform.Translate(Vector3.left * snakeTouspeed);
-            //}
-
             transform.position = new Vector3(transform.position.x + x * snakeTouspeed, transform.position.y, transform.position.z);
             MouseVe = cam.ScreenToWorldPoint(Input.mousePosition);
 
@@ -97,70 +194,6 @@ public class SnakeHeader : SnakeBody
             {
                 transform.position = new Vector3(-8, transform.position.y, transform.position.z);
             }
-
-            //mous = cam.ScreenToWorldPoint(Input.mousePosition);
         }
-
-    }
-
-    // 最新的数据放在最后面
-    [Header("DLinkedList")]
-    private stl.DLinkedNode<Vector3> dlHead = new stl.DLinkedNode<Vector3>();
-    private stl.DLinkedNode<Vector3> dlTail = new stl.DLinkedNode<Vector3>();
-    public int DLCount = 0;
-    void InitDLink(){
-        this.dlHead.next = this.dlTail;
-        this.dlHead.prev = null;
-        this.dlTail.prev = this.dlHead;
-        this.dlTail.next = null;
-        this.DLCount = 0;
-    }
-    bool IsDLEmpty(){ return DLCount == 0; }
-    stl.DLinkedNode<Vector3> AppendDLNode(Vector3 data){
-        return this.AppendDLNode(data, this.dlTail.prev);
-    }
-    stl.DLinkedNode<Vector3> PrependDLNode(Vector3 data){
-        return this.AppendDLNode(data, this.dlHead);
-    }
-
-    stl.DLinkedNode<Vector3> AppendDLNode(Vector3 data, stl.DLinkedNode<Vector3> target){
-        var node = new stl.DLinkedNode<Vector3>(data);
-        target.next.prev = node;
-        node.next = target.next;
-        node.prev = target;
-        target.next = node;
-        ++this.DLCount;
-        return node;
-    }
-
-    stl.DLinkedNode<Vector3> RemoveLast(){
-        if(this.DLCount == 0){
-            return null;
-        }
-        var node = this.dlTail.prev;
-        node.prev.next = node.next;
-        node.next.prev = node.prev;
-        node.next = null;
-        node.prev = null;
-        --this.DLCount;
-        return node;
-    }
-
-
-    private void ReduceDLSize(){
-        while(this.DLCount > 60){
-            this.RemoveLast();
-        }
-    }
-
-    private void DumpLink(){
-        var cur = this.dlHead.next;
-        Debug.Log(">>>>>>>>>>>>>>>>>>>>>>> start ");
-        while(cur != this.dlTail){
-            var data = cur.data;
-            Debug.Log($">>x:{data.x} y:{data.y} z:{data.z}");
-            cur = cur.next;
-        }
-        Debug.Log(">>>>>>>>>>>>>>>>>>>>>>> end ");
     }
 }

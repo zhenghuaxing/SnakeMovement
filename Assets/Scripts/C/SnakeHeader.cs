@@ -43,10 +43,14 @@ public class SnakeHeader : SnakeBody
         // update movement
         transform.Translate(Vector3.forward.normalized *GameInfo._instance.playSpeed, Space.World); // 头节点的位置
         this.RecordPosition(transform.position);
-        this.followHead(m_SnakeBodys, previousPositions);
+        this.FollowHead(m_SnakeBodys, previousPositions);
+
+        if(Input.GetKeyDown(KeyCode.Space)){
+            this.DestroyFirstBody();
+        }
     }
 
-    void followHead(List<SnakeBody> tail, LinkedList<PathItem> path)
+    void FollowHead(List<SnakeBody> tail, LinkedList<PathItem> path)
     {
         // 包含父亲节点的路径的起点
         LinkedListNode<PathItem> startNode = path.First;
@@ -85,58 +89,6 @@ public class SnakeHeader : SnakeBody
         }
     }
 
-    void followHeadXX(List<SnakeBody> tail, LinkedList<Vector3> path)
-    {
-        // assuming at least one node in linked list
-        var segmentStart = path.First.Value;
-        var segmentEndNode = path.First.Next;
-
-        var lengthToSegmentEnd = 0.0f;
-
-        SnakeBody snakeBodyParent = this;
-        foreach (var part in tail)
-        {
-            var segmentEnd = Vector3.zero;
-            var segmentDiff = Vector3.zero;
-            var segmentLength = 0f;
-            var lengthToSegmentStart = lengthToSegmentEnd;
-
-            // advance to correct segment if needed
-            while (part.DistanceToParent(snakeBodyParent) > lengthToSegmentEnd)
-            {
-                if (segmentEndNode == null)
-                {
-                    // path too short
-                    // NullReferenceException inbound, if not handled
-                    break;
-                }
-
-                segmentEnd = segmentEndNode.Value;
-                segmentDiff = segmentEnd - segmentStart;
-                segmentLength = segmentDiff.magnitude;
-                lengthToSegmentEnd += segmentLength;
-                segmentStart = segmentEndNode.Value;
-                segmentEndNode = segmentEndNode.Next;
-            }
-
-            // interpolate position on segment
-            var distanceLeft = part.DistanceToParent(snakeBodyParent) - lengthToSegmentStart;
-            var percentageAlongSegment = distanceLeft / segmentLength;
-
-            part.transform.position = segmentStart +
-                            segmentDiff * percentageAlongSegment;
-
-            segmentStart = segmentEnd;
-            snakeBodyParent = part;
-        }
-
-        // cutting off unnecessary end of path
-        while (segmentEndNode != path.Last)
-        {
-            path.RemoveLast();
-        }
-    }
-
     LinkedListNode<PathItem> RecordPosition(Vector3 pos, bool first = false){
         if(first){
             var item = new PathItem();
@@ -162,6 +114,15 @@ public class SnakeHeader : SnakeBody
         gameObj.transform.rotation = transform.rotation;
         var body = gameObj.GetComponent<SnakeBody>();
         this.m_SnakeBodys.Add(body);
+    }
+
+    // 删除某个节点
+    void DestroyFirstBody(){
+        if(this.m_SnakeBodys.Count > 0){
+            var bodyToRemove = this.m_SnakeBodys[0];
+            this.m_SnakeBodys.RemoveAt(0);
+            Destroy(bodyToRemove.gameObject);
+        }
     }
 
     // 获取最后一个节点的位置，作为新的节点的初始位置

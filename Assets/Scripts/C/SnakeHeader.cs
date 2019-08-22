@@ -24,11 +24,11 @@ public class SnakeHeader : SnakeBody
     // 记录蛇身节点
     List<SnakeBody> m_SnakeBodys = new List<SnakeBody>();
     // 固定的距离；
-    float CONST_LENGTH = 1.5f;
+    float CONST_LENGTH = 1.0f;
 
     void Start()
     {
-        snakeTouspeed = 0.5f;
+        snakeTouspeed = 3.5f;
         this.RecordPosition(transform.position, true);
         // 初始化加载
         for(int i = 0; i<30; ++i){

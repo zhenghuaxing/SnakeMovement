@@ -230,7 +230,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   SnakebodyLinght: 0
   snakeTouspeed: 0
-  playSpeed: 1
+  playSpeed: 0.1
 --- !u!4 &129000898
 Transform:
   m_ObjectHideFlags: 0
@@ -798,12 +798,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3941da8dc8f344b69b331758faed9061, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  next: {fileID: 0}
   cam: {fileID: 300273882}
   SnakeBodyPrefab: {fileID: 2538316694354114214, guid: 76787981f895047f2b737e4d73f4b7b4,
     type: 3}
   snakeBodyMgr: {fileID: 1999532816}
-  DLCount: 0
 --- !u!23 &721874603
 MeshRenderer:
   m_ObjectHideFlags: 0
